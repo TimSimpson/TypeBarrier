@@ -45,35 +45,43 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
         if st:
             # This is probably a new type?
             return convert_value(st, value)
-        else:
-            raise TypeError(f'cannot convert {value} to callable {target}')
-        print(dir(target))
+        # handle below:
     elif issubclass(type(value), target):
         # The given type is a subtype of the type we need.
         return value
-    else:
-        try:
-            sig = inspect.signature(target)
-        except ValueError:
-            raise TypeError(f'can\'t convert "{value}" (type {type(value)}) '
-                            f'to {target}.')
 
-        params = [param
-                  for param in sig.parameters.values()
-                  if param.kind not in [inspect.Parameter.VAR_POSITIONAL,
-                                        inspect.Parameter.VAR_KEYWORD]]
-        if len(params) < 1:
-            raise TypeError(f'{target} does not accept any parameters, cannot '
-                            f'convert from value "{value}".')
-        elif len(params) > 1:
-            raise TypeError(f'{target} does accepts {len(params)} parameters, '
-                            f'cannot create from value "{value}".')
-        param = params[0]
-        if param.annotation and not issubclass(param.annotation, params):  # type: ignore  # NOQA
-            raise TypeError(f'sole argument to {target} accepts type '
-                            f'{param.annotation}; cannot be satisified with '
-                            f'value {value}.')
-        return target(value)
+    # At this point, see if calling target and passing value as the first
+    # argument will work.
+    try:
+        sig = inspect.signature(target)
+    except ValueError:
+        raise TypeError(f'can\'t convert "{value}" (type {type(value)}) '
+                        f'to {target}.')
+
+    params = [param
+              for param in sig.parameters.values()
+              if param.kind not in [inspect.Parameter.VAR_POSITIONAL,
+                                    inspect.Parameter.VAR_KEYWORD]]
+    if len(params) < 1:
+        raise TypeError(f'{target} does not accept any parameters, cannot '
+                        f'convert from value "{value}".')
+    elif len(params) > 1:
+        raise TypeError(f'{target} does accepts {len(params)} parameters, '
+                        f'cannot create from value "{value}".')
+    param = params[0]
+    if param.annotation:
+        if param.annotation != target:
+            try:
+                convert_value(param.annotation, value)
+            except TypeError as te:
+                raise TypeError(f'sole argument to {target} accepts type '
+                                f'{param.annotation}; cannot be satisified '
+                                f'with value {value}.') from te
+    # if param.annotation and not issubclass(param.annotation, params):  # type: ignore  # NOQA
+    #     raise TypeError(f'sole argument to {target} accepts type '
+    #                     f'{param.annotation}; cannot be satisified with '
+    #                     f'value {value}.')
+    return target(value)
 
 
 def typeify_callable(target: t.Callable, d: TwDict) -> TwDict:

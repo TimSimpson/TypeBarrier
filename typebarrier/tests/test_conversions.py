@@ -23,6 +23,20 @@ def test_new_type():
     assert c.convert_value(NewTypeStr, 'some-string') == 'some-string'
 
 
+def test_single_arg():
+
+    def some_func(i: int) -> str:
+        return f'index={i}'
+
+    assert c.convert_value(some_func, 78) == 'index=78'
+
+    class Guid:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+    guid = c.convert_value(Guid, 'happy')
+    assert guid.value == 'happy'
+
 # def test_call_func():
 
 #     state = { 'called': False }
