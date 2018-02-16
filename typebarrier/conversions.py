@@ -36,6 +36,16 @@ def convert_dictionary(target: t.Any, value: t.Dict) -> t.Any:
 
 
 def convert_value(target: t.Any, value: t.Any) -> t.Any:
+    """Given a callable target, apply value.
+
+    target can be a typical type, in which case an instance of the class is
+    returned, or a function or other callable, in which case `value` will
+    be passed to the function somehow.
+
+    In any case, lists and dictionaries and lists are passed as *args and
+    **kwargs, except that for each item the types given by the annotations is
+    checked and errors may be raised.
+    """
     if isinstance(value, dict):
         return convert_dictionary(target, value)
     elif isinstance(value, list):

@@ -23,6 +23,16 @@ def test_new_type():
     assert c.convert_value(NewTypeStr, 'some-string') == 'some-string'
 
 
+def test_invalid_conversions():
+    def some_func() -> int:
+        return 42
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(some_func, 42)
+
+    assert 'does not accept any parameters,' in str(excinfo.value)
+
+
 def test_single_arg_func():
 
     def some_func(i: int) -> str:
