@@ -4,6 +4,8 @@ Allows type strong conversions from JSON-safe dictionaries to Python 3 type anno
 
 ## Usage
 
+!! Note: this package is still under construction, so what you see below is currently a lie.
+
 Imagine you have a framework which may dispatch arbitrary arguments to a number of functions.
 
 In Python, this is easy:
