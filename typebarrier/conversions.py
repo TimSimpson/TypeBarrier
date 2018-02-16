@@ -66,7 +66,7 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
         raise TypeError(f'{target} does not accept any parameters, cannot '
                         f'convert from value "{value}".')
     elif len(params) > 1:
-        raise TypeError(f'{target} does accepts {len(params)} parameters, '
+        raise TypeError(f'{target} accepts {len(params)} parameters, '
                         f'cannot create from value "{value}".')
     param = params[0]
     if param.annotation:

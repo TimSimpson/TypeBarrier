@@ -23,13 +23,27 @@ def test_new_type():
     assert c.convert_value(NewTypeStr, 'some-string') == 'some-string'
 
 
-def test_single_arg():
+def test_single_arg_func():
 
     def some_func(i: int) -> str:
         return f'index={i}'
 
     assert c.convert_value(some_func, 78) == 'index=78'
 
+
+def test_single_arg_func_from_wrong_type_fails():
+
+    def some_func(i: int) -> str:
+        return f'index={i}'
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(some_func, 'hai')
+
+    assert ('accepts type <class \'int\'>; cannot be satisified'
+            in str(excinfo.value))
+
+
+def test_single_arg_class_init():
     class Guid:
         def __init__(self, value: str) -> None:
             self.value = value
@@ -37,27 +51,26 @@ def test_single_arg():
     guid = c.convert_value(Guid, 'happy')
     assert guid.value == 'happy'
 
-# def test_call_func():
 
-#     state = { 'called': False }
+def test_single_arg_class_init_from_wrong_type_fails():
 
-#     def func():
-#         state['called'] = True
+    class Guid:
+        def __init__(self, value: str) -> None:
+            self.value = value
 
-#     tb.typeify(func, None)
-#     assert state['called']
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(Guid, 42)
 
-#     state['called'] = False
-
-#     tb.typeify(func, {})
-#     assert state['called']
+    assert ('accepts type <class \'str\'>; cannot be satisified'
+            in str(excinfo.value))
 
 
-# def test_go():
+def test_two_arg_func():
 
-#     def func(a: int, b: str="hai", **kwargs: t.Dict[str, int]) -> bool:
-#         return False
+    def some_func(a: int, b: int) -> str:
+        return f'index={a}'
 
-#     tb.typeify(func, {'a': 4,  'b': 3})
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(some_func, 78)
 
-#     assert False
+    assert 'accepts 2 parameters, cannot create' in str(excinfo.value)
