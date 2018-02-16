@@ -5,7 +5,7 @@ import typing as t
 TwDict = t.Dict[str, t.Any]
 
 
-def convert_list_args_to_kwargs(target: t.Any, value: t.List) -> t.Any:
+def convert_list_to_kwargs(target: t.Any, value: t.List) -> t.Any:
     """Go from list to a kwargs dictionary."""
     sig = inspect.signature(target)
     result = {}
@@ -19,12 +19,27 @@ def convert_list_args_to_kwargs(target: t.Any, value: t.List) -> t.Any:
             var_positional_param = p, index
         else:
             if len(value) <= index:
-                raise TypeError(f'missing a positional argument: {index}')
-            result[p.name] = convert_value(p.annotation, value[index])
+                if p.default == inspect.Parameter.empty:
+                    raise TypeError(f'missing a positional argument: {index}')
+            else:
+                result[p.name] = convert_value(p.annotation, value[index])
 
     if var_positional_param:
         param, index = var_positional_param
-        result[param.name] = value[index:]
+
+        if param.annotation != inspect.Parameter.empty:
+            var_arg = []
+            for index, element in enumerate(value[index:]):
+                try:
+                    var_arg.append(convert_value(param.annotation, element))
+                except TypeError as te:
+                    raise TypeError(f'problem converting element {index} in a '
+                                    f'list of args for {target} variable '
+                                    f'length args: {te}')
+        else:
+            var_arg = value[index:]
+        result[param.name] = var_arg
+    return result
 
 
 def convert_list(target: t.Any, value: t.List) -> t.Any:
