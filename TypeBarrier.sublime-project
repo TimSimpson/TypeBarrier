@@ -1,0 +1,22 @@
+{
+    "folders":
+    [
+        {
+            "path": "./",
+            "folder_exclude_patterns":
+            [
+                ".tox"
+            ]
+        },
+    ],
+    "build_systems":
+    [
+        {
+            "file_regex": "(^.*?\\.py)\\:([0-9]*)",
+            "name": "tests",
+            "shell_cmd": "${proejct_path:${folder}}/.venv/bin/typebarrier-tests",
+            "working_dir": "${project_path:${folder}}"
+        }
+    ]
+
+}

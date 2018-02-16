@@ -1,0 +1,21 @@
+[[source]]
+url = 'https://pypi.python.org/simple'
+verify_ssl = true
+name = 'pypi'
+
+[requires]
+python_version = '3.6'
+
+[packages]
+TypeBarrier = { path = ".", editable = true }
+typing      = '*'
+
+[dev-packages]
+TypeBarrierTests    = { path = "./scripts", editable = true }
+coverage            = '*'
+flake8              = '*'
+flake8-bugbear      = '*'
+flake8-import-order = '*'
+mypy                = '*'
+pep8-naming         = '*'
+pytest              = '*'
