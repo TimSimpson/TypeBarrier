@@ -5,7 +5,54 @@ import pytest
 from typebarrier import conversions as c
 
 
+# Define a lot of types for the tests to play with.
+
 NewTypeStr = t.NewType('NewTypeStr', str)
+
+
+class Guid:
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def __eq__(self, other):
+        return isinstance(other, Guid) and self.value == other.value
+
+    def __hash__(self):
+        return hash(self.value)
+
+
+class Track:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return isinstance(other, Track) and self.name == other.name
+
+    def __repr__(self):
+        return '~TRACK:' + self.name + '~'
+
+
+Artist = t.NewType('Artist', str)
+
+
+class Disc:
+    def __init__(self, tracks: t.List[Track]) -> None:
+        self.tracks = tracks
+
+    def __eq__(self, other):
+        return isinstance(other, Disc) and self.tracks == other.tracks
+
+    def __repr__(self):
+        return 'DISC{' + ','.join(repr(track) for track in self.tracks) + '}'
+
+
+MultiDiscAlbum = t.List[Disc]  # NOQA -it's a type stupid flake8
+
+
+TrackToArtistMapping = t.Dict[Track, Artist]
 
 
 def test_primitives():
@@ -99,9 +146,6 @@ def test_single_arg_func_from_wrong_type_fails():
 
 
 def test_single_arg_class_init():
-    class Guid:
-        def __init__(self, value: str) -> None:
-            self.value = value
 
     guid = c.convert_value(Guid, 'happy')
     assert guid.value == 'happy'
@@ -201,14 +245,6 @@ def test_convert_list_arg():
 
 
 def test_convert_list_arg_to_type_when_possible():
-
-    class Guid:
-        def __init__(self, name: str) -> None:
-            self.name = name
-
-        def __eq__(self, other):
-            return isinstance(other, Guid) and self.name == other.name
-
     def some_func(g_list: t.List[Guid]) -> t.List[Guid]:
         return g_list
 
@@ -218,31 +254,6 @@ def test_convert_list_arg_to_type_when_possible():
 
     a = c.convert_value(some_func, ['a', 'b', 'c'])
     assert a == expected_g_list
-
-
-class Track:
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-    def __eq__(self, other):
-        return isinstance(other, Track) and self.name == other.name
-
-    def __repr__(self):
-        return '~TRACK:' + self.name + '~'
-
-
-class Disc:
-    def __init__(self, tracks: t.List[Track]) -> None:
-        self.tracks = tracks
-
-    def __eq__(self, other):
-        return isinstance(other, Disc) and self.tracks == other.tracks
-
-    def __repr__(self):
-        return 'DISC{' + ','.join(repr(track) for track in self.tracks) + '}'
-
-
-MultiDiscAlbum = t.List[Disc]  # NOQA -it's a type stupid flake8
 
 
 class TestConvertToListOfLists:
@@ -285,3 +296,24 @@ class TestConvertToListOfLists:
             ])
 
         assert self.expected_g_list == actual
+
+
+def test_convert_to_dict_of_dicts():
+    mapping: TrackToArtistMapping = {
+        Track('TA'): Artist('AA'),
+        Track('TB'): Artist('AB')
+    }
+
+    assert c.convert_value(TrackToArtistMapping, mapping) == mapping
+
+    assert c.convert_value(TrackToArtistMapping, {
+            'TA': 'AA',
+            'TB': 'AB',
+        }) == mapping
+
+    assert c.convert_value(t.Dict[Guid, TrackToArtistMapping], {
+            'g': {
+                'TA': 'AA',
+                'TB': 'AB',
+            }
+        }) == {Guid('g'): mapping}
