@@ -48,8 +48,8 @@ T = t.TypeVar('T')
 def convert_list(target: type, value: t.List) -> t.List[T]:
     if not issubclass(target, list):
         raise ValueError('"{target}" is not a subclass of list')
-    type_args = getattr(target, '__args__', None)
     element_type = t.Any
+    type_args = getattr(target, '__args__', None)
     if type_args:
         if len(type_args) != 1:
             raise NotImplemented(f'do not know how to convert type "{target}"')
@@ -62,7 +62,23 @@ def convert_list(target: type, value: t.List) -> t.List[T]:
 
 
 def convert_dictionary(target: t.Any, value: t.Dict) -> t.Any:
-    raise NotImplemented()
+    if not issubclass(target, dict):
+        raise ValueError(f'"{target}" is not a subclass of dict')
+    if not isinstance(value, dict):
+        raise TypeError(f'can\'t convert "{value}" '
+                        f'(type {type(value)}) to {target}')
+    key_type, value_type = t.Any, t.Any
+    type_args = getattr(target, '__args__', None)
+    if type_args:
+        if len(type_args) != 2:
+            raise NotImplemented(f'do not know how to convert type "{target}"')
+        key_type, value_type = type_args
+    try:
+        return {convert_value(key_type, k): convert_value(value_type, v)
+                for k, v in value.items()}
+    except TypeError as te:
+        raise TypeError(f'can\'t convert "{value}" (type {type(value)}) '
+                        f'to {target}.') from te
 
 
 def convert_value(target: t.Any, value: t.Any) -> t.Any:
@@ -79,14 +95,14 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
     print(f'target={target}')
     if target == t.Any:
         return value
-    if isinstance(value, dict):
-        return convert_dictionary(target, value)
-    elif inspect.isfunction(target):
+    if inspect.isfunction(target):
         st = getattr(target, '__supertype__', None)
         if st:
             # This is probably a new type?
             return convert_value(st, value)
         # handle with the function calling code below:
+    elif issubclass(target, dict):
+        return convert_dictionary(target, value)
     elif issubclass(target, list):
         return convert_list(target, value)
     elif issubclass(type(value), target):

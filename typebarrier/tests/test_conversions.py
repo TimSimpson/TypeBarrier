@@ -41,6 +41,29 @@ def test_list_failures():
             'to typing.List[str].' in str(excinfo.value))
 
 
+def test_dictionary():
+    assert c.convert_value(dict, {'a': 1, 2: 'b'}) == {'a': 1, 2: 'b'}
+    assert (c.convert_value(t.Dict[str, int], {'a': 1, 'b': 2})
+            == {'a': 1, 'b': 2})
+
+
+def test_dictionary_failures():
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(dict, 42)
+    assert ('can\'t convert "42" (type <class \'int\'>) '
+            'to <class \'dict\'>' in str(excinfo.value))
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(t.Dict[str, int], {1: 1})
+    assert ('can\'t convert "{1: 1}" (type <class \'dict\'>) '
+            'to typing.Dict[str, int].' in str(excinfo.value))
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(t.Dict[str, int], {'a': 'b'})
+    assert ('can\'t convert "{\'a\': \'b\'}" (type <class \'dict\'>) '
+            'to typing.Dict[str, int].' in str(excinfo.value))
+
+
 def test_new_type():
     assert c.convert_value(NewTypeStr, 'some-string') == 'some-string'
 
