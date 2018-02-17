@@ -13,10 +13,32 @@ def test_primitives():
     assert c.convert_value(int, 42) == 42
     assert c.convert_value(bool, True)
 
+
+def test_primitives_raises():
     with pytest.raises(TypeError) as excinfo:
         c.convert_value(str, 42)
     assert ('can\'t convert "42" (type <class \'int\'>) '
             'to <class \'str\'>' in str(excinfo.value))
+
+
+def test_list():
+    assert c.convert_value(list, [1, 2, '3']) == [1, 2, '3']
+    assert c.convert_value(t.List[str], ['a', 'b']) == ['a', 'b']
+    assert c.convert_value(list, range(5)) == [0, 1, 2, 3, 4]
+    assert (c.convert_value(t.List[str], (str(x) for x in range(5)))
+            == ['0', '1', '2', '3', '4'])
+
+
+def test_list_failures():
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(list, 42)
+    assert ('can\'t convert "42" (type <class \'int\'>) '
+            'to <class \'list\'>' in str(excinfo.value))
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(t.List[str], [1, 2, 3])
+    assert ('can\'t convert "[1, 2, 3]" (type <class \'list\'>) '
+            'to typing.List[str].' in str(excinfo.value))
 
 
 def test_new_type():
@@ -124,3 +146,20 @@ def test_convert_list_to_kwargs():
 
     assert ('problem converting element 0 in a list of args for '
             in str(excinfo.value))
+
+    def func0() -> str:
+        return ':D'
+
+    assert c.convert_list_to_kwargs(func0, []) == {}
+
+
+# def test_convert_list_arg():
+
+#     def some_func(s_list: t.List[str]) -> str:
+#         return ','.join(s_list)
+
+#     assert c.convert_value(some_func, ['a', 'b', 'c']) == 'a,b,c'
+
+#     with pytest.raises(TypeError) as excinfo:
+#         c.convert_value(some_func, 'a')
+#     assert 'is not a subclass of list' in str(excinfo.value)

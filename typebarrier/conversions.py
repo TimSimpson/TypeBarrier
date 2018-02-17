@@ -42,8 +42,24 @@ def convert_list_to_kwargs(target: t.Any, value: t.List) -> t.Any:
     return result
 
 
-def convert_list(target: t.Any, value: t.List) -> t.Any:
-    raise NotImplemented()
+T = t.TypeVar('T')
+
+
+def convert_list(target: type, value: t.List) -> t.List[T]:
+    print(f'pee={target}')
+    if not issubclass(target, list):
+        raise ValueError('"{target}" is not a subclass of list')
+    type_args = getattr(target, '__args__', None)
+    element_type = t.Any
+    if type_args:
+        if len(type_args) != 1:
+            raise NotImplemented(f'do not know how to convert type "{target}"')
+        element_type = type_args[0]
+    try:
+        return [convert_value(element_type, e) for e in value]
+    except TypeError as te:
+        raise TypeError(f'can\'t convert "{value}" (type {type(value)}) '
+                        f'to {target}.') from te
 
 
 def convert_dictionary(target: t.Any, value: t.Dict) -> t.Any:
@@ -61,16 +77,19 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
     **kwargs, except that for each item the types given by the annotations is
     checked and errors may be raised.
     """
+    print(f'target={target}')
+    if target == t.Any:
+        return value
     if isinstance(value, dict):
         return convert_dictionary(target, value)
-    elif isinstance(value, list):
-        return convert_list(target, value)
     elif inspect.isfunction(target):
         st = getattr(target, '__supertype__', None)
         if st:
             # This is probably a new type?
             return convert_value(st, value)
-        # handle below:
+        # handle with the function calling code below:
+    elif issubclass(target, list):
+        return convert_list(target, value)
     elif issubclass(type(value), target):
         # The given type is a subtype of the type we need.
         return value
