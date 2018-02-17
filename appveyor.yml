@@ -1,0 +1,9 @@
+environment:
+  PYTHON: "C:\\Python36"
+
+build_script:
+  - cmd: >-
+      SET PATH=%PATH%;%PYTHON%\Scripts\
+      pip install pipenv
+      pipenv install --dev"
+      pipenv run typebarrier-tests"
