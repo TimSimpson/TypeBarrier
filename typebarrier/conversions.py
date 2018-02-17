@@ -5,6 +5,52 @@ import typing as t
 TwDict = t.Dict[str, t.Any]
 
 
+def convert_dictionary_to_kwargs(target: t.Any, value: dict) -> t.Any:
+    """Go from list to a kwargs dictionary."""
+    sig = inspect.signature(target)
+    result = {}
+    var_keyword_param: t.Optional[inspect.Parameter] = None
+
+    for p in sig.parameters.values():
+        if p.kind == inspect.Parameter.VAR_KEYWORD:
+            assert var_keyword_param is None
+            var_keyword_param = p
+        elif p.kind == inspect.Parameter.VAR_POSITIONAL:
+            pass  # Can't do anything, just ignore
+        else:
+            if p.name not in value:
+                if p.default == p.empty:
+                    raise TypeError(f'missing a required argument: {p.name}')
+                # Otherwise just let the default arg do its thang
+            else:
+                result[p.name] = convert_value(p.annotation, value[p.name])
+
+    extra_dict_keys = set(value.keys()).difference(
+        set(sig.parameters.keys()))
+    if extra_dict_keys:
+        if var_keyword_param:
+            if var_keyword_param.annotation != inspect.Parameter.empty:
+                var_kwargs = {}
+                for key in extra_dict_keys:
+                    try:
+                        var_kwargs[key] = convert_value(
+                            var_keyword_param.annotation, value[key])
+                    except TypeError as te:
+                        raise TypeError(f'problem converting argument "{key}" '
+                                        'to annotated variable keyword arg '
+                                        f'type {var_keyword_param.annotation} '
+                                        f'found in {target}.')
+                result[var_keyword_param.name] = var_kwargs
+            else:
+                result[var_keyword_param.name] = {
+                    name: value[name] for name in extra_dict_keys
+                }
+        else:
+            raise TypeError('the following parameters not accepted for '
+                            f'"{target}" : {list(extra_dict_keys)}')
+    return result
+
+
 def convert_list_to_kwargs(target: t.Any, value: t.List) -> t.Any:
     """Go from list to a kwargs dictionary."""
     sig = inspect.signature(target)
@@ -39,6 +85,10 @@ def convert_list_to_kwargs(target: t.Any, value: t.List) -> t.Any:
         else:
             var_arg = value[index:]
         result[param.name] = var_arg
+    else:
+        if len(value) > len(result):
+            raise TypeError(f'{target} takes {len(result)} positional '
+                            f'argument(s) but {len(value)} were given')
     return result
 
 
@@ -117,6 +167,14 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
         raise TypeError(f'can\'t convert "{value}" (type {type(value)}) '
                         f'to {target}.')
 
+    # If the incoming value is a dictionary, we don't attempt to pass it in
+    # as the single argument even if that's what the parameter list accepts.
+    # Doing so would make things too confusing (what to do in the event of
+    # variable keyword arguments?).
+    if isinstance(value, dict):
+        kwargs = convert_dictionary_to_kwargs(target, value)
+        return target(kwargs)
+
     params = [param
               for param in sig.parameters.values()
               if param.kind not in [inspect.Parameter.VAR_POSITIONAL,
@@ -140,57 +198,9 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
     return target(value)
 
 
-def typeify_callable(target: t.Callable, d: TwDict) -> TwDict:
-    return convert_dictionary(target, d)
-
-    # result = {}
-    # sig = inspect.signature(target)
-
-    # var_keyword_param: t.Optional[inspect.Parameter] = None
-
-    # for p in sig.parameters.values():
-    #     print(p.name)
-    #     print(p.kind)
-    #     print(p.default)
-    #     print(p.annotation)
-    #     print(',')
-
-    #     if p.kind == inspect.Parameter.VAR_KEYWORD:
-    #         assert var_keyword_param is None
-    #         var_keyword_param = p
-    #     elif p.kind == inspect.Parameter.VAR_POSITIONAL:
-    #         # This would work maybe for a list?
-    #         raise TypeError('positional arguments not supported- can\'t '
-    #                         f'convert parameter {p}')
-    #     else:
-    #         if p.name not in d:
-    #             if p.default != p.empty:
-    #                 raise TypeError(f'missing a required argument: {p.name}')
-    #         else:
-    #             result[p.name] = _convert(p.annotation, d[p.name])
-
-    # extra_dict_keys = set(d.keys()).difference(
-    #     set(sig.parameters.sig.parameter.keys()))
-    # if var_keyword_param:
-    #     result[var_keyword_param.name] = {
-    #         name: d[name] for name in extra_dict_keys
-    #     }
-
-    # raise TypeError('How I do this?')
-
-    # print('->')
-    # print(sig.return_annotation)
-
-    # print()
-
-    # b = sig.bind(**d)
-    # print(b)
-    # return {}
-
-
-def typeify(target: t.Any, d: TwDict) -> TwDict:
-    """Given a """
-    if callable(target):
-        return typeify_callable(target, d)
-    else:
-        raise NotImplemented()
+# def typeify(target: t.Any, d: TwDict) -> TwDict:
+#     """Given a """
+#     if callable(target):
+#         return typeify_callable(target, d)
+#     else:
+#         raise NotImplemented()

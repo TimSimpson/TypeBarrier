@@ -194,7 +194,10 @@ def test_convert_list_to_kwargs():
     with pytest.raises(TypeError) as excinfo:
         c.convert_list_to_kwargs(func2, [1])
 
-    assert 'missing a positional argument: 1' in str(excinfo.value)
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_list_to_kwargs(func2, [1, 'a', True, 4])
+
+    assert '3 positional argument(s) but 4 were given' in str(excinfo.value)
 
     def func3(*args) -> str:
         return ' '.join(args)
@@ -317,3 +320,63 @@ def test_convert_to_dict_of_dicts():
                 'TB': 'AB',
             }
         }) == {Guid('g'): mapping}
+
+
+def test_convert_dictionary_to_kwargs():
+
+    def func(a: int, b: str) -> str:
+        return f'a={a}, b={b}'
+
+    assert c.convert_dictionary_to_kwargs(func, {'a': 1, 'b': 'b'}) == {
+        'a': 1, 'b': 'b'}
+
+    def func2(a: int, b: str, c: bool=False) -> str:
+        return f'a={a}, b={b}, c={c}'
+
+    assert c.convert_dictionary_to_kwargs(
+        func2, {'a': 1, 'b': 'a', 'c': True}) == {'a': 1, 'b': 'a', 'c': True}
+
+    assert c.convert_dictionary_to_kwargs(func2, {'a': 1, 'b': 'a'}) == {
+        'a': 1, 'b': 'a'}
+
+    with pytest.raises(TypeError):
+        c.convert_dictionary_to_kwargs(func2, {'a': 1})
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_dictionary_to_kwargs(
+            func2, {'a': 1, 'b': 'a', 'c': True, 'd': 4})
+
+    assert 'the following parameters not accepted for' in str(excinfo.value)
+
+    def func3(*args) -> str:
+        return ' '.join(args)
+
+    assert c.convert_dictionary_to_kwargs(func3, {}) == {}
+
+    # TODO: Add a test with **kwargs here and in the list tests above!
+
+    def func3_kwargs(**kwargs) -> dict:
+        return kwargs
+
+    assert c.convert_dictionary_to_kwargs(func3_kwargs, {'a': 1, 'b': 2}) == {
+        'kwargs': {'a': 1, 'b': 2}}
+
+    def func4_str_kwargs(**kwargs: str) -> dict:
+        return kwargs
+
+    assert c.convert_dictionary_to_kwargs(
+        func4_str_kwargs, {}) == {}
+
+    assert c.convert_dictionary_to_kwargs(
+        func4_str_kwargs, {'magic': 'value'}) == {'kwargs': {'magic': 'value'}}
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_dictionary_to_kwargs(
+            func4_str_kwargs, {'magic': 1})
+
+    assert 'problem converting argument "magic"' in str(excinfo.value)
+
+    def func0() -> str:
+        return ':D'
+
+    assert c.convert_dictionary_to_kwargs(func0, {}) == {}
