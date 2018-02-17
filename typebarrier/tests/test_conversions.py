@@ -175,3 +175,23 @@ def test_convert_list_arg():
         c.convert_value(some_func, [42])
     assert 'sole argument to' in str(excinfo.value)
     assert 'cannot be satisified with value [42]' in str(excinfo.value)
+
+
+def test_convert_list_arg_to_type_when_possible():
+
+    class Guid:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def __eq__(self, other):
+            return isinstance(other, Guid) and self.name == other.name
+
+    def some_func(g_list: t.List[Guid]) -> t.List[Guid]:
+        return g_list
+
+    expected_g_list = [Guid('a'), Guid('b'), Guid('c')]
+
+    assert c.convert_value(some_func, expected_g_list) == expected_g_list
+
+    a = c.convert_value(some_func, ['a', 'b', 'c'])
+    assert a == expected_g_list

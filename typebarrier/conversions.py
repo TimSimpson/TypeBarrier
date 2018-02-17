@@ -116,15 +116,12 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
     if param.annotation:
         if param.annotation != target:
             try:
-                convert_value(param.annotation, value)
+                arg = convert_value(param.annotation, value)
             except TypeError as te:
                 raise TypeError(f'sole argument to {target} accepts type '
                                 f'{param.annotation}; cannot be satisified '
                                 f'with value {value}.') from te
-    # if param.annotation and not issubclass(param.annotation, params):  # type: ignore  # NOQA
-    #     raise TypeError(f'sole argument to {target} accepts type '
-    #                     f'{param.annotation}; cannot be satisified with '
-    #                     f'value {value}.')
+            return target(arg)
     return target(value)
 
 
