@@ -1,8 +1,6 @@
 # Type Barrier
 
-[![Build Status](https://travis-ci.org/TimSimpson/TypeBarrier.svg?branch=master)](https://travis-ci.org/TimSimpson/TypeBarrier)
-
-[![Build status](https://ci.appveyor.com/api/projects/status/gyaabdspagf8ld8b/branch/master?svg=true)](https://ci.appveyor.com/project/TimSimpson/typebarrier/branch/master)
+[![Build Status](https://travis-ci.org/TimSimpson/TypeBarrier.svg?branch=master)](https://travis-ci.org/TimSimpson/TypeBarrier) [![Build status](https://ci.appveyor.com/api/projects/status/gyaabdspagf8ld8b/branch/master?svg=true)](https://ci.appveyor.com/project/TimSimpson/typebarrier/branch/master)
 
 
 
