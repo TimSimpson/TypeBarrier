@@ -195,3 +195,70 @@ def test_convert_list_arg_to_type_when_possible():
 
     a = c.convert_value(some_func, ['a', 'b', 'c'])
     assert a == expected_g_list
+
+
+class Track:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __eq__(self, other):
+        return isinstance(other, Track) and self.name == other.name
+
+    def __repr__(self):
+        return '~TRACK:' + self.name + '~'
+
+
+class Disc:
+    def __init__(self, tracks: t.List[Track]) -> None:
+        self.tracks = tracks
+
+    def __eq__(self, other):
+        return isinstance(other, Disc) and self.tracks == other.tracks
+
+    def __repr__(self):
+        return 'DISC{' + ','.join(repr(track) for track in self.tracks) + '}'
+
+
+MultiDiscAlbum = t.List[Disc]  # NOQA -it's a type stupid flake8
+
+
+class TestConvertToListOfLists:
+    expected_g_list = [
+        Disc([
+            Track('I Could Never Forget That Sandwhich'),
+            Track('Someone Left a Bake Out Caked in Pain'),
+            Track('Tim Simpson Fireside Chat, 1978'),
+        ]),
+        Disc([
+            Track('Legend of Gaseous Duck'),
+            Track('Greetings From the King of Crime'),
+        ]),
+    ]
+
+    def test_convert_to_typed_list(self):
+        actual = c.convert_value(
+            Disc,
+            [
+                'I Could Never Forget That Sandwhich',
+                'Someone Left a Bake Out Caked in Pain',
+                'Tim Simpson Fireside Chat, 1978',
+            ]
+        )
+        assert actual == self.expected_g_list[0]
+
+    def test_convert_to_list_of_typed_list(self):
+        actual = c.convert_value(
+            MultiDiscAlbum,
+            [
+                [
+                    'I Could Never Forget That Sandwhich',
+                    'Someone Left a Bake Out Caked in Pain',
+                    'Tim Simpson Fireside Chat, 1978',
+                ],
+                [
+                    'Legend of Gaseous Duck',
+                    'Greetings From the King of Crime',
+                ]
+            ])
+
+        assert self.expected_g_list == actual
