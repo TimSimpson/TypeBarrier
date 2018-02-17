@@ -46,7 +46,6 @@ T = t.TypeVar('T')
 
 
 def convert_list(target: type, value: t.List) -> t.List[T]:
-    print(f'pee={target}')
     if not issubclass(target, list):
         raise ValueError('"{target}" is not a subclass of list')
     type_args = getattr(target, '__args__', None)
