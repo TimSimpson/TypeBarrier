@@ -173,7 +173,7 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
     # variable keyword arguments?).
     if isinstance(value, dict):
         kwargs = convert_dictionary_to_kwargs(target, value)
-        return target(kwargs)
+        return target(**kwargs)
 
     params = [param
               for param in sig.parameters.values()
@@ -196,11 +196,3 @@ def convert_value(target: t.Any, value: t.Any) -> t.Any:
                                 f'with value {value}.') from te
             return target(arg)
     return target(value)
-
-
-# def typeify(target: t.Any, d: TwDict) -> TwDict:
-#     """Given a """
-#     if callable(target):
-#         return typeify_callable(target, d)
-#     else:
-#         raise NotImplemented()

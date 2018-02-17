@@ -380,3 +380,20 @@ def test_convert_dictionary_to_kwargs():
         return ':D'
 
     assert c.convert_dictionary_to_kwargs(func0, {}) == {}
+
+
+def test_convert_dict_to_class():
+    assert c.convert_value(Guid, {'value': 'five'}).value == 'five'
+
+    disc = c.convert_value(
+        Disc,
+        {
+            'tracks': [
+                {'name': '1'},
+                '2',
+            ],
+        })
+
+    assert len(disc.tracks) == 2
+    assert disc.tracks[0].name == '1'
+    assert disc.tracks[1].name == '2'
