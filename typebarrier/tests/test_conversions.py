@@ -153,13 +153,25 @@ def test_convert_list_to_kwargs():
     assert c.convert_list_to_kwargs(func0, []) == {}
 
 
-# def test_convert_list_arg():
+def test_convert_list_arg():
 
-#     def some_func(s_list: t.List[str]) -> str:
-#         return ','.join(s_list)
+    def some_func(s_list: t.List[str]) -> str:
+        return ','.join(s_list)
 
-#     assert c.convert_value(some_func, ['a', 'b', 'c']) == 'a,b,c'
+    assert c.convert_value(some_func, ['a', 'b', 'c']) == 'a,b,c'
 
-#     with pytest.raises(TypeError) as excinfo:
-#         c.convert_value(some_func, 'a')
-#     assert 'is not a subclass of list' in str(excinfo.value)
+    # This is surprising, until you remember strings are iterable.
+    # Cracking down on this might forbid useful behaviors, so in it stays.
+    assert c.convert_value(some_func, 'a') == 'a'
+
+    assert c.convert_value(some_func, 'abc') == 'a,b,c'
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(some_func, 42)
+    assert 'sole argument to' in str(excinfo.value)
+    assert 'cannot be satisified with value 42' in str(excinfo.value)
+
+    with pytest.raises(TypeError) as excinfo:
+        c.convert_value(some_func, [42])
+    assert 'sole argument to' in str(excinfo.value)
+    assert 'cannot be satisified with value [42]' in str(excinfo.value)
