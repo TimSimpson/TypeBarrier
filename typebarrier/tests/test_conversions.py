@@ -397,3 +397,6 @@ def test_convert_dict_to_class():
     assert len(disc.tracks) == 2
     assert disc.tracks[0].name == '1'
     assert disc.tracks[1].name == '2'
+
+
+# TODO: add a test for t.Optional types as well as Unions in general
