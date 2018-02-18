@@ -37,7 +37,7 @@ class CodeGen:
         return f'v{self._vi}'
 
     def add_line(self, line: str) -> None:
-        self._lines.append(' ' * self._indent + line)
+        self._lines.append(' ' * self._indent * 4 + line)
 
     def add_lines(self, lines: t.List[str]) -> None:
         for line in lines:
@@ -45,9 +45,9 @@ class CodeGen:
 
     def add_return(self, expr: str) -> None:
         if self._return_variables:
-            self._lines.append(f'{self._return_variables[-1]} = {expr}')
+            self.add_line(f'{self._return_variables[-1]} = {expr}')
         else:
-            self._lines.append(f'return {expr}')
+            self.add_line(f'return {expr}')
 
     def start_inline_func(self) -> str:
         """Call this before adding an inline func.
@@ -64,6 +64,19 @@ class CodeGen:
     def render(self) -> str:
         return '\n'.join(self._lines)
 
+    @property
+    def namespace(self) -> t.Dict[str, t.Any]:
+        return self._namespace
+
+
+def convert_dictionary(code: CodeGen, target: t.Any, arg_var: str) -> None:
+    """Writes code needed to convert a dictionary into the given type.
+
+    "target" is known at generation time while arg_var is just a string
+    representing the incoming argument value in the generated code.
+    """
+    code.add_line('raise NotImplemented()  # TODO: add dict code')
+
 
 def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
     """Writes code needed to convert "arg_var" to arbitrary type "target".
@@ -71,7 +84,7 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
     "target" is known at generation time while arg_var is just a string
     representing the argument value.
     """
-
+    target_var_name = code.inject_closure_var(target)
     print(f'target={target}')
     if target == t.Any:
         code.add_return(arg_var)
@@ -90,8 +103,7 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
         # return convert_list(target, value)
 
     if not inspect.isfunction(target):
-        cv = code.inject_closure_var(target)
-        code.add_line(f'if issubclass(type({arg_var}), {cv}):')
+        code.add_line(f'if issubclass(type({arg_var}), {target_var_name}):')
         code.indent()
         code.add_return(arg_var)
         code.dedent()
@@ -101,38 +113,46 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
     try:
         sig = inspect.signature(target)
     except ValueError:
-        cv = code.inject_closure_var(target)
         code.add_line(
-            f"""raise TypeError('can't convert "{{{arg_var}}}" """
-            f"""(type {{type({arg_var})}}) to {{{cv}}}.')""")
+            f"""raise TypeError('can\\'t convert "{{{arg_var}}}" """
+            f"""(type {{type({arg_var})}}) to {{{target_var_name}}}.')""")
+        return
 
-    sig
-    # # If the incoming value is a dictionary, we don't attempt to pass it in
-    # # as the single argument even if that's what the parameter list accepts.
-    # # Doing so would make things too confusing (what to do in the event of
-    # # variable keyword arguments?).
-    # if isinstance(value, dict):
-    #     kwargs = convert_dictionary_to_kwargs(target, value)
-    #     return target(**kwargs)
+    # If the incoming value is a dictionary, we don't attempt to pass it in
+    # as the single argument even if that's what the parameter list accepts.
+    # Doing so would make things too confusing (what to do in the event of
+    # variable keyword arguments?).
+    code.add_line(f'if isinstance({arg_var}, dict):')
+    code.indent()
+    convert_dictionary(code, target, arg_var)
+    code.dedent()
 
-    # params = [param
-    #           for param in sig.parameters.values()
-    #           if param.kind not in [inspect.Parameter.VAR_POSITIONAL,
-    #                                 inspect.Parameter.VAR_KEYWORD]]
-    # if len(params) < 1:
-    #     raise TypeError(f'{target} does not accept any parameters, cannot '
-    #                     f'convert from value "{value}".')
-    # elif len(params) > 1:
-    #     raise TypeError(f'{target} accepts {len(params)} parameters, '
-    #                     f'cannot create from value "{value}".')
-    # param = params[0]
-    # if param.annotation:
-    #     if param.annotation != target:
-    #         try:
-    #             arg = convert_value(param.annotation, value)
-    #         except TypeError as te:
-    #             raise TypeError(f'sole argument to {target} accepts type '
-    #                             f'{param.annotation}; cannot be satisified '
-    #                             f'with value {value}.') from te
-    #         return target(arg)
-    # return target(value)
+    params = [param
+              for param in sig.parameters.values()
+              if param.kind not in [inspect.Parameter.VAR_POSITIONAL,
+                                    inspect.Parameter.VAR_KEYWORD]]
+    if len(params) < 1:
+        code.add_line(f"""raise TypeError('{target} does not accept """
+                      """any parameters, cannot convert from value """
+                      f"""{{{arg_var}}}.')""")
+        return
+    elif len(params) > 1:
+        code.add_line(f"""raise TypeError('{target} accepts {len(params)} """
+                      """parameters, cannot create from value"""
+                      f""" "{{{arg_var}}}".')""")
+        return
+    param = params[0]
+    if param.annotation:
+        if param.annotation != target:  # avoid infinitie recursion
+            code.add_line('try:')
+            code.indent()
+            return_value = code.start_inline_func()
+            convert_value(code, param.annotation, arg_var)
+            code.end_inline_func()
+            code.dedent()
+            var_name = code.make_var()
+            code.add_line(f'except TypeError as {var_name}:')
+            code.indent()
+            code.add_line(f"""raise TypeError('sole argument to {target} accepts type {param.annotation}; cannot be satisified with value {{{arg_var}}}.') from {var_name}""")  # NOQA
+            code.dedent()
+            code.add_line(f'return {target_var_name}({return_value})')
