@@ -1,8 +1,6 @@
 import inspect
 import typing as t
 
-from . import conversions as c  # NOQA
-
 
 T = t.TypeVar('T')
 

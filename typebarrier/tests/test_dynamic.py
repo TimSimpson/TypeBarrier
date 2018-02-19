@@ -2,7 +2,7 @@ import typing as t
 
 import pytest
 
-from typebarrier import conversions as c
+from typebarrier import dynamic as d
 
 
 # Define a lot of types for the tests to play with.
@@ -56,63 +56,63 @@ TrackToArtistMapping = t.Dict[Track, Artist]
 
 
 def test_primitives():
-    assert c.convert_value(str, 'some-string') == 'some-string'
-    assert c.convert_value(int, 42) == 42
-    assert c.convert_value(bool, True)
+    assert d.convert_value(str, 'some-string') == 'some-string'
+    assert d.convert_value(int, 42) == 42
+    assert d.convert_value(bool, True)
 
 
 def test_primitives_raises():
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(str, 42)
+        d.convert_value(str, 42)
     assert ('can\'t convert "42" (type <class \'int\'>) '
             'to <class \'str\'>' in str(excinfo.value))
 
 
 def test_list():
-    assert c.convert_value(list, [1, 2, '3']) == [1, 2, '3']
-    assert c.convert_value(t.List[str], ['a', 'b']) == ['a', 'b']
-    assert c.convert_value(list, range(5)) == [0, 1, 2, 3, 4]
-    assert (c.convert_value(t.List[str], (str(x) for x in range(5)))
+    assert d.convert_value(list, [1, 2, '3']) == [1, 2, '3']
+    assert d.convert_value(t.List[str], ['a', 'b']) == ['a', 'b']
+    assert d.convert_value(list, range(5)) == [0, 1, 2, 3, 4]
+    assert (d.convert_value(t.List[str], (str(x) for x in range(5)))
             == ['0', '1', '2', '3', '4'])
 
 
 def test_list_failures():
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(list, 42)
+        d.convert_value(list, 42)
     assert ('can\'t convert "42" (type <class \'int\'>) '
             'to <class \'list\'>' in str(excinfo.value))
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(t.List[str], [1, 2, 3])
+        d.convert_value(t.List[str], [1, 2, 3])
     assert ('can\'t convert "[1, 2, 3]" (type <class \'list\'>) '
             'to typing.List[str].' in str(excinfo.value))
 
 
 def test_dictionary():
-    assert c.convert_value(dict, {'a': 1, 2: 'b'}) == {'a': 1, 2: 'b'}
-    assert (c.convert_value(t.Dict[str, int], {'a': 1, 'b': 2})
+    assert d.convert_value(dict, {'a': 1, 2: 'b'}) == {'a': 1, 2: 'b'}
+    assert (d.convert_value(t.Dict[str, int], {'a': 1, 'b': 2})
             == {'a': 1, 'b': 2})
 
 
 def test_dictionary_failures():
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(dict, 42)
+        d.convert_value(dict, 42)
     assert ('can\'t convert "42" (type <class \'int\'>) '
             'to <class \'dict\'>' in str(excinfo.value))
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(t.Dict[str, int], {1: 1})
+        d.convert_value(t.Dict[str, int], {1: 1})
     assert ('can\'t convert "{1: 1}" (type <class \'dict\'>) '
             'to typing.Dict[str, int].' in str(excinfo.value))
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(t.Dict[str, int], {'a': 'b'})
+        d.convert_value(t.Dict[str, int], {'a': 'b'})
     assert ('can\'t convert "{\'a\': \'b\'}" (type <class \'dict\'>) '
             'to typing.Dict[str, int].' in str(excinfo.value))
 
 
 def test_new_type():
-    assert c.convert_value(NewTypeStr, 'some-string') == 'some-string'
+    assert d.convert_value(NewTypeStr, 'some-string') == 'some-string'
 
 
 def test_invalid_conversions():
@@ -120,7 +120,7 @@ def test_invalid_conversions():
         return 42
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(some_func, 42)
+        d.convert_value(some_func, 42)
 
     assert 'does not accept any parameters,' in str(excinfo.value)
 
@@ -130,7 +130,7 @@ def test_single_arg_func():
     def some_func(i: int) -> str:
         return f'index={i}'
 
-    assert c.convert_value(some_func, 78) == 'index=78'
+    assert d.convert_value(some_func, 78) == 'index=78'
 
 
 def test_single_arg_func_from_wrong_type_fails():
@@ -139,7 +139,7 @@ def test_single_arg_func_from_wrong_type_fails():
         return f'index={i}'
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(some_func, 'hai')
+        d.convert_value(some_func, 'hai')
 
     assert ('accepts type <class \'int\'>; cannot be satisified'
             in str(excinfo.value))
@@ -147,7 +147,7 @@ def test_single_arg_func_from_wrong_type_fails():
 
 def test_single_arg_class_init():
 
-    guid = c.convert_value(Guid, 'happy')
+    guid = d.convert_value(Guid, 'happy')
     assert guid.value == 'happy'
 
 
@@ -158,7 +158,7 @@ def test_single_arg_class_init_from_wrong_type_fails():
             self.value = value
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(Guid, 42)
+        d.convert_value(Guid, 42)
 
     assert ('accepts type <class \'str\'>; cannot be satisified'
             in str(excinfo.value))
@@ -170,7 +170,7 @@ def test_two_arg_func():
         return f'index={a}'
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(some_func, 78)
+        d.convert_value(some_func, 78)
 
     assert 'accepts 2 parameters, cannot create' in str(excinfo.value)
 
@@ -180,39 +180,39 @@ def test_convert_list_to_kwargs():
     def func(a: int, b: str) -> str:
         return f'a={a}, b={b}'
 
-    assert c.convert_list_to_kwargs(func, [1, 'a']) == {'a': 1, 'b': 'a'}
+    assert d.convert_list_to_kwargs(func, [1, 'a']) == {'a': 1, 'b': 'a'}
 
     def func2(a: int, b: str, c: bool=False) -> str:
         return f'a={a}, b={b}, c={c}'
 
-    assert c.convert_list_to_kwargs(func2, [1, 'a', True]) == {
+    assert d.convert_list_to_kwargs(func2, [1, 'a', True]) == {
         'a': 1, 'b': 'a', 'c': True}
 
-    assert c.convert_list_to_kwargs(func2, [1, 'a']) == {
+    assert d.convert_list_to_kwargs(func2, [1, 'a']) == {
         'a': 1, 'b': 'a'}
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_list_to_kwargs(func2, [1])
+        d.convert_list_to_kwargs(func2, [1])
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_list_to_kwargs(func2, [1, 'a', True, 4])
+        d.convert_list_to_kwargs(func2, [1, 'a', True, 4])
 
     assert '3 positional argument(s) but 4 were given' in str(excinfo.value)
 
     def func3(*args) -> str:
         return ' '.join(args)
 
-    assert c.convert_list_to_kwargs(func3, []) == {'args': []}
+    assert d.convert_list_to_kwargs(func3, []) == {'args': []}
 
-    assert c.convert_list_to_kwargs(func3, [1, 2, 3]) == {'args': [1, 2, 3]}
+    assert d.convert_list_to_kwargs(func3, [1, 2, 3]) == {'args': [1, 2, 3]}
 
     def func4(*args: str) -> str:
         return ' '.join(args)
 
-    assert c.convert_list_to_kwargs(func4, []) == {'args': []}
+    assert d.convert_list_to_kwargs(func4, []) == {'args': []}
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_list_to_kwargs(func4, [1, 2, 3])
+        d.convert_list_to_kwargs(func4, [1, 2, 3])
 
     assert ('problem converting element 0 in a list of args for '
             in str(excinfo.value))
@@ -220,7 +220,7 @@ def test_convert_list_to_kwargs():
     def func0() -> str:
         return ':D'
 
-    assert c.convert_list_to_kwargs(func0, []) == {}
+    assert d.convert_list_to_kwargs(func0, []) == {}
 
 
 def test_convert_list_arg():
@@ -228,21 +228,21 @@ def test_convert_list_arg():
     def some_func(s_list: t.List[str]) -> str:
         return ','.join(s_list)
 
-    assert c.convert_value(some_func, ['a', 'b', 'c']) == 'a,b,c'
+    assert d.convert_value(some_func, ['a', 'b', 'c']) == 'a,b,c'
 
     # This is surprising, until you remember strings are iterable.
     # Cracking down on this might forbid useful behaviors, so in it stays.
-    assert c.convert_value(some_func, 'a') == 'a'
+    assert d.convert_value(some_func, 'a') == 'a'
 
-    assert c.convert_value(some_func, 'abc') == 'a,b,c'
+    assert d.convert_value(some_func, 'abc') == 'a,b,c'
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(some_func, 42)
+        d.convert_value(some_func, 42)
     assert 'sole argument to' in str(excinfo.value)
     assert 'cannot be satisified with value 42' in str(excinfo.value)
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_value(some_func, [42])
+        d.convert_value(some_func, [42])
     assert 'sole argument to' in str(excinfo.value)
     assert 'cannot be satisified with value [42]' in str(excinfo.value)
 
@@ -253,9 +253,9 @@ def test_convert_list_arg_to_type_when_possible():
 
     expected_g_list = [Guid('a'), Guid('b'), Guid('c')]
 
-    assert c.convert_value(some_func, expected_g_list) == expected_g_list
+    assert d.convert_value(some_func, expected_g_list) == expected_g_list
 
-    a = c.convert_value(some_func, ['a', 'b', 'c'])
+    a = d.convert_value(some_func, ['a', 'b', 'c'])
     assert a == expected_g_list
 
 
@@ -273,7 +273,7 @@ class TestConvertToListOfLists:
     ]
 
     def test_convert_to_typed_list(self):
-        actual = c.convert_value(
+        actual = d.convert_value(
             Disc,
             [
                 'I Could Never Forget That Sandwhich',
@@ -284,7 +284,7 @@ class TestConvertToListOfLists:
         assert actual == self.expected_g_list[0]
 
     def test_convert_to_list_of_typed_list(self):
-        actual = c.convert_value(
+        actual = d.convert_value(
             MultiDiscAlbum,
             [
                 [
@@ -307,14 +307,14 @@ def test_convert_to_dict_of_dicts():
         Track('TB'): Artist('AB')
     }
 
-    assert c.convert_value(TrackToArtistMapping, mapping) == mapping
+    assert d.convert_value(TrackToArtistMapping, mapping) == mapping
 
-    assert c.convert_value(TrackToArtistMapping, {
+    assert d.convert_value(TrackToArtistMapping, {
             'TA': 'AA',
             'TB': 'AB',
         }) == mapping
 
-    assert c.convert_value(t.Dict[Guid, TrackToArtistMapping], {
+    assert d.convert_value(t.Dict[Guid, TrackToArtistMapping], {
             'g': {
                 'TA': 'AA',
                 'TB': 'AB',
@@ -327,23 +327,23 @@ def test_convert_dictionary_to_kwargs():
     def func(a: int, b: str) -> str:
         return f'a={a}, b={b}'
 
-    assert c.convert_dictionary_to_kwargs(func, {'a': 1, 'b': 'b'}) == {
+    assert d.convert_dictionary_to_kwargs(func, {'a': 1, 'b': 'b'}) == {
         'a': 1, 'b': 'b'}
 
     def func2(a: int, b: str, c: bool=False) -> str:
         return f'a={a}, b={b}, c={c}'
 
-    assert c.convert_dictionary_to_kwargs(
+    assert d.convert_dictionary_to_kwargs(
         func2, {'a': 1, 'b': 'a', 'c': True}) == {'a': 1, 'b': 'a', 'c': True}
 
-    assert c.convert_dictionary_to_kwargs(func2, {'a': 1, 'b': 'a'}) == {
+    assert d.convert_dictionary_to_kwargs(func2, {'a': 1, 'b': 'a'}) == {
         'a': 1, 'b': 'a'}
 
     with pytest.raises(TypeError):
-        c.convert_dictionary_to_kwargs(func2, {'a': 1})
+        d.convert_dictionary_to_kwargs(func2, {'a': 1})
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_dictionary_to_kwargs(
+        d.convert_dictionary_to_kwargs(
             func2, {'a': 1, 'b': 'a', 'c': True, 'd': 4})
 
     assert 'the following parameters not accepted for' in str(excinfo.value)
@@ -351,27 +351,27 @@ def test_convert_dictionary_to_kwargs():
     def func3(*args) -> str:
         return ' '.join(args)
 
-    assert c.convert_dictionary_to_kwargs(func3, {}) == {}
+    assert d.convert_dictionary_to_kwargs(func3, {}) == {}
 
     # TODO: Add a test with **kwargs here and in the list tests above!
 
     def func3_kwargs(**kwargs) -> dict:
         return kwargs
 
-    assert c.convert_dictionary_to_kwargs(func3_kwargs, {'a': 1, 'b': 2}) == {
+    assert d.convert_dictionary_to_kwargs(func3_kwargs, {'a': 1, 'b': 2}) == {
         'kwargs': {'a': 1, 'b': 2}}
 
     def func4_str_kwargs(**kwargs: str) -> dict:
         return kwargs
 
-    assert c.convert_dictionary_to_kwargs(
+    assert d.convert_dictionary_to_kwargs(
         func4_str_kwargs, {}) == {}
 
-    assert c.convert_dictionary_to_kwargs(
+    assert d.convert_dictionary_to_kwargs(
         func4_str_kwargs, {'magic': 'value'}) == {'kwargs': {'magic': 'value'}}
 
     with pytest.raises(TypeError) as excinfo:
-        c.convert_dictionary_to_kwargs(
+        d.convert_dictionary_to_kwargs(
             func4_str_kwargs, {'magic': 1})
 
     assert 'problem converting argument "magic"' in str(excinfo.value)
@@ -379,13 +379,13 @@ def test_convert_dictionary_to_kwargs():
     def func0() -> str:
         return ':D'
 
-    assert c.convert_dictionary_to_kwargs(func0, {}) == {}
+    assert d.convert_dictionary_to_kwargs(func0, {}) == {}
 
 
 def test_convert_dict_to_class():
-    assert c.convert_value(Guid, {'value': 'five'}).value == 'five'
+    assert d.convert_value(Guid, {'value': 'five'}).value == 'five'
 
-    disc = c.convert_value(
+    disc = d.convert_value(
         Disc,
         {
             'tracks': [

@@ -3,7 +3,7 @@ import textwrap
 import typing as t
 
 from . import codegen as cg
-from . import conversions as c  # NOQA
+from . import dynamic as d  # NOQA
 
 T = t.TypeVar('T')
 
@@ -39,13 +39,13 @@ def convert_list(target: type,
     namespace = {
         'element_type': element_type,
         't': t,
-        'c': c,
+        'd_conv': d.convert_value,
         'T': T,
     }
     a = ast.parse(textwrap.dedent("""
         def converter(value: t.List) -> t.List[T]:
             try:
-                return [c.convert_value(element_type, e) for e in value]
+                return [d_conv(element_type, e) for e in value]
             except TypeError as te:
                 raise TypeError(
                     f'can\\'t convert "{value}" (type {type(value)}) '
