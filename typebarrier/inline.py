@@ -2,8 +2,8 @@ import ast
 import textwrap
 import typing as t
 
+from . import codegen as cg
 from . import conversions as c  # NOQA
-
 
 T = t.TypeVar('T')
 
@@ -55,3 +55,19 @@ def convert_list(target: type,
     exec(code, namespace)
     f = namespace['converter']
     return f
+
+
+def convert_value(target: type) -> t.Callable[[t.Any], t.Any]:
+    code = cg.CodeGen()
+    function_name = code.make_var()
+    t_any_var_name = code.inject_closure_var(t.Any)
+    target_var_name = code.inject_closure_var(target)
+    code.add_line(f'def {function_name}(value: {t_any_var_name}) '
+                  f'-> {target_var_name}:')
+    code.indent()
+    cg.convert_value(code, target, 'value')
+
+    a = ast.parse(code.render())
+    compiled_code = compile(a, filename='<generated code>', mode='exec')
+    exec(compiled_code, code.namespace)
+    return code.namespace[function_name]

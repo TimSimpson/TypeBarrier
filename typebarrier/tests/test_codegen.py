@@ -23,7 +23,8 @@ def test_str():
     assert g.render() == code_str("""
         if issubclass(type(arg1), cv1):
             return arg1
-        raise TypeError('can\\'t convert "{arg1}" (type {type(arg1)}) to {cv1}.')
+        else:
+            raise TypeError(f'can\\'t convert "{arg1}" (type {type(arg1)}) to {cv1}.')
         """)  # NOQA
     assert g.namespace == {'cv1': str}
 
@@ -34,7 +35,8 @@ def test_int():
     assert g.render() == code_str("""
         if issubclass(type(arg1), cv1):
             return arg1
-        raise TypeError('can\\'t convert "{arg1}" (type {type(arg1)}) to {cv1}.')
+        else:
+            raise TypeError(f'can\\'t convert "{arg1}" (type {type(arg1)}) to {cv1}.')
         """)  # NOQA
     assert g.namespace == {'cv1': int}
 
@@ -45,10 +47,12 @@ def test_empty_callable():
 
     g = cg.CodeGen()
     cg.convert_value(g, func, 'arg1')
+    print(g.render())
     assert g.render().startswith(code_str("""
         if isinstance(arg1, dict):
             raise NotImplemented()  # TODO: add dict code
-        raise TypeError('<function test_empty_callable.<locals>"""))  # NOQA
+        else:
+            raise TypeError(f'<function test_empty_callable.<locals>"""))  # NOQA
     assert g.render().endswith(
         """does not accept any parameters, cannot convert from value {arg1}.')""")  # NOQA
 
@@ -59,17 +63,20 @@ def test_one_param_callable():
 
     g = cg.CodeGen()
     cg.convert_value(g, func, 'arg1')
+    print(g.render())
     assert g.render() == code_str("""
         if isinstance(arg1, dict):
             raise NotImplemented()  # TODO: add dict code
-        try:
-            if issubclass(type(arg1), cv2):
-                v1 = arg1
-            raise TypeError('can\\'t convert "{arg1}" (type {type(arg1)}) to {cv2}.')
-        except TypeError as v2:
-            raise TypeError('sole argument to """ # NOQA
-            + str(func) + """ accepts type <class 'int'>; cannot be satisified with value {arg1}.') from v2
-        return cv1(v1)
+        else:
+            try:
+                if issubclass(type(arg1), cv2):
+                    v1 = arg1
+                else:
+                    raise TypeError(f'can\\'t convert "{arg1}" (type {type(arg1)}) to {cv2}.')
+            except TypeError as v2:
+                raise TypeError(f'sole argument to """ # NOQA
+                + str(func) + """ accepts type <class \\'int\\'>; cannot be satisified with value {arg1}.') from v2
+            return cv1(v1)
     """)  # NOQA
 
 
@@ -82,6 +89,7 @@ def test_two_param_callable():
     assert g.render().startswith(code_str("""
         if isinstance(arg1, dict):
             raise NotImplemented()  # TODO: add dict code
-        raise TypeError("""))  # NOQA
+        else:
+            raise TypeError(f"""))  # NOQA
     assert g.render().endswith(
         """accepts 2 parameters, cannot create from value "{arg1}".')""")  # NOQA

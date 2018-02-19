@@ -7,6 +7,11 @@ from . import conversions as c  # NOQA
 T = t.TypeVar('T')
 
 
+def esq(whatevs: t.Any) -> str:
+    """escape single quotes"""
+    return str(whatevs).replace("'", "\\'")
+
+
 class CodeGen:
     """Generates code for a function."""
 
@@ -17,6 +22,7 @@ class CodeGen:
         self._return_variables: t.List[str] = []
         self._namespace: t.Dict[str, t.Any] = {}
         self._indent = 0
+        self._return_indent: t.List[int] = []
 
     def dedent(self) -> None:
         self._indent -= 1
@@ -54,11 +60,14 @@ class CodeGen:
 
         The variable name used for the return value is returned here.
         """
+        self._return_indent.append(self._indent)
         self._return_variables.append(self.make_var())
         return self._return_variables[-1]
 
     def end_inline_func(self) -> None:
         """Call this after adding inline function code."""
+        assert self._indent >= self._return_indent[-1]
+        self._indent = self._return_indent.pop()
         del self._return_variables[-1]
 
     def render(self) -> str:
@@ -107,6 +116,8 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
         code.indent()
         code.add_return(arg_var)
         code.dedent()
+        code.add_line('else:')
+        code.indent()
 
     # At this point, see if calling target and passing value as the first
     # argument will work.
@@ -114,7 +125,7 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
         sig = inspect.signature(target)
     except ValueError:
         code.add_line(
-            f"""raise TypeError('can\\'t convert "{{{arg_var}}}" """
+            f"""raise TypeError(f'can\\'t convert "{{{arg_var}}}" """
             f"""(type {{type({arg_var})}}) to {{{target_var_name}}}.')""")
         return
 
@@ -126,19 +137,21 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
     code.indent()
     convert_dictionary(code, target, arg_var)
     code.dedent()
+    code.add_line('else:')
+    code.indent()
 
     params = [param
               for param in sig.parameters.values()
               if param.kind not in [inspect.Parameter.VAR_POSITIONAL,
                                     inspect.Parameter.VAR_KEYWORD]]
     if len(params) < 1:
-        code.add_line(f"""raise TypeError('{target} does not accept """
+        code.add_line(f"""raise TypeError(f'{esq(target)} does not accept """
                       """any parameters, cannot convert from value """
                       f"""{{{arg_var}}}.')""")
         return
     elif len(params) > 1:
-        code.add_line(f"""raise TypeError('{target} accepts {len(params)} """
-                      """parameters, cannot create from value"""
+        code.add_line(f"""raise TypeError(f'{esq(target)} accepts """
+                      f"""{len(params)} parameters, cannot create from value"""
                       f""" "{{{arg_var}}}".')""")
         return
     param = params[0]
@@ -153,6 +166,6 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
             var_name = code.make_var()
             code.add_line(f'except TypeError as {var_name}:')
             code.indent()
-            code.add_line(f"""raise TypeError('sole argument to {target} accepts type {param.annotation}; cannot be satisified with value {{{arg_var}}}.') from {var_name}""")  # NOQA
+            code.add_line(f"""raise TypeError(f'sole argument to {esq(target)} accepts type {esq(param.annotation)}; cannot be satisified with value {{{arg_var}}}.') from {var_name}""")  # NOQA
             code.dedent()
             code.add_line(f'return {target_var_name}({return_value})')
