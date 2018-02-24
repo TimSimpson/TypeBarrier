@@ -30,6 +30,10 @@ class CodeGen:
 
     def inject_closure_var(self, var: t.Any) -> str:
         """Adds variable to `namespace` dictionary. Returns key"""
+        for k, v in self._namespace.items():
+            if v == var:
+                return k
+
         self._cv += 1
         name = f'cv{self._cv}'
         self._namespace[name] = var
@@ -53,13 +57,13 @@ class CodeGen:
         else:
             self.add_line(f'return {expr}')
 
-    def start_inline_func(self) -> str:
+    def start_inline_func(self, return_var: t.Optional[str]=None) -> str:
         """Call this before adding an inline func.
 
         The variable name used for the return value is returned here.
         """
         self._return_indent.append(self._indent)
-        self._return_variables.append(self.make_var())
+        self._return_variables.append(return_var or self.make_var())
         return self._return_variables[-1]
 
     def end_inline_func(self) -> None:
@@ -74,6 +78,203 @@ class CodeGen:
     @property
     def namespace(self) -> t.Dict[str, t.Any]:
         return self._namespace
+
+
+def convert_dictionary_to_kwargs(code: CodeGen,
+                                 target: t.Any,
+                                 arg_var: str) -> None:
+    """
+    Produces code which, given a target, returns a dictionary of
+    keyword arguments.
+    """
+    sig = inspect.signature(target)
+    var_keyword_param: t.Optional[inspect.Parameter] = None
+
+    check_key_error = False
+
+    result_var = code.make_var()
+    code.add_line(f'{result_var} = {{}}')
+
+    for p in sig.parameters.values():
+        if p.kind == inspect.Parameter.VAR_KEYWORD:
+            assert var_keyword_param is None
+            var_keyword_param = p
+        elif p.kind == inspect.Parameter.VAR_POSITIONAL:
+            pass  # Can't do anything, just ignore
+        else:
+            if p.default == p.empty:
+                if not check_key_error:
+                    check_key_error = True
+                    code.add_line('try:')
+                    code.indent()
+            else:
+                code.add_line(f'if \'{p.name}\' in {arg_var}:')
+                code.indent()
+
+            code.start_inline_func(f'{result_var}["{p.name}"]')
+            # Add this arg to the eventual call
+            convert_value(code,
+                          p.annotation,
+                          f'{arg_var}["{p.name}"]')
+            code.end_inline_func()
+            if p.default != p.empty:  # if this was in an if statement
+                code.dedent()
+
+    if check_key_error:
+        # in except clause, resurface any key errors as a TypeError
+        code.dedent()
+        ke_var = code.make_var()
+        code.add_line(f'except KeyError as {ke_var}:')
+        code.indent()
+        code.add_line("""raise TypeError(f'missing a required argument: """
+                      f"""{{{ke_var}}}') from {ke_var}""")
+        code.dedent()
+
+    # OK, now that the conversion of normal params is done, have to deal
+    # with kwazy kwargs
+    possible_kwargs = code.make_var()
+    code.add_line(f'{possible_kwargs} = set('
+                  + ','.join(f"'{k}'" for k in sig.parameters.keys()) + ')')
+
+    extra_dict_keys_var = code.make_var()
+    code.add_line(f'{extra_dict_keys_var} = set({arg_var}.keys()).difference('
+                  f'{possible_kwargs})')
+    if var_keyword_param:
+        if var_keyword_param.annotation != inspect.Parameter.empty:
+            # Ugh, have to do type strong conversion just in case
+            var_kwargs_var = code.make_var()
+            code.add_line(f'{var_kwargs_var} = {{}}')
+            key_var = code.make_var()
+            code.add_line(f'for {key_var} in {extra_dict_keys_var}:')
+            code.indent()  # START FOR LOOP
+            code.add_line('try:')
+            code.indent()  # START TRY
+            code.start_inline_func(f'{var_kwargs_var}[{key_var}]')
+            convert_value(code,
+                          var_keyword_param.annotation,
+                          f'{arg_var}[{key_var}]')
+            code.end_inline_func()
+            code.dedent()  # END TRY
+            te_var = code.make_var()
+            code.add_line(f'except TypeError as {te_var}:')
+            code.indent()  # START EXCEPT
+            code.add_line('raise TypeError(f\'problem converting argument '
+                          f'"{{{key_var}}}" to annotated variable keyword '
+                          f'are type {var_keyword_param.annotation} '
+                          f'found in {target}.')
+            code.dedent()  # END EXCEPT
+            code.dedent()  # END FOR LOOP
+            code.add_line(f'{result_var}[{var_keyword_param.name}] = '
+                          f'{var_kwargs_var}')
+        else:
+            # simple conversion of extra stuff to the kwarg parameter
+            code.add_line(f'{result_var}[{var_keyword_param.name}] = '
+                          f'{{ name: {arg_var}[name] '
+                          f'for name in {extra_dict_keys_var} }}')
+    else:
+        code.add_line(f'if {extra_dict_keys_var}:')
+        code.indent()
+        code.add_line("""raise TypeError(f'the following parameters not """
+                      f"""accepted for "{target}" : """
+                      f"""{{list({extra_dict_keys_var})}}')""")
+    code.add_return(result_var)
+
+
+# The goal of the method below is to be more efficient by not creating a
+# dictionary if possible.
+# def _convert_dictionary_value(code: CodeGen,
+#                               target: t.Any,
+#                               arg_var: str) -> None:
+#     sig = inspect.signature(target)
+#     var_keyword_param: t.Optional[inspect.Parameter] = None
+
+#     check_key_error = False
+
+#     possible_calls: t.List[t.List[str]] = []
+
+#     call_index = code.make_var()
+#     code.add_line(f'{call_index} = 0')
+
+#     for p in sig.parameters.values():
+#         if p.kind == inspect.Parameter.VAR_KEYWORD:
+#             assert var_keyword_param is None
+#             var_keyword_param = p
+#         elif p.kind == inspect.Parameter.VAR_POSITIONAL:
+#             pass  # Can't do anything, just ignore
+#         else:
+#             if p.default == p.empty:
+#                 if not check_key_error:
+#                     check_key_error = True
+#                     code.add_line('try:')
+#                     code.indent()
+#             else:
+#                 code.add_line(f'if \'{p.name}\' not in {arg_var}:')
+#                 code.indent()
+#                 code.add_line(f'{call_index} = {len(possible_calls)}')
+#                 next_call = list(possible_calls[-1])  # make a copy
+#                 possible_calls.append(next_call)
+#                 code.dedent()
+#                 code.add_line('else:')
+#                 code.indent()
+
+#             tmp_var = code.start_inline_func()
+#             # Add this arg to the eventual call
+#             possible_calls[-1].append(tmp_var)
+#             convert_value(code,
+#                           p.annotation,
+#                           f'{arg_var}[\'{p.name}\']')
+#             current_call.append(tmp_var)
+#             code.end_inline_func()
+#             if p.default != p.empty:
+#                 code.dedent()
+
+#     if check_key_error:
+#         # in except clause, resurface any key errors as a TypeError
+#         code.dedent()
+#         ke_var = code.make_var()
+#         code.add_line(f'except KeyError as {ke_var}:')
+#         code.indent()
+#         code.add_line("""raise TypeError(f'missing a required argument: """
+#                       f"""{{{ke_var}}}') from {ke_var}""")
+#         code.dedent()
+
+#     # OK, now that the conversion of normal params is done, have to deal
+#     # with kwazy kwargs
+#     possible_kwargs = code.make_var()
+#     code.add_line(f'{possible_kwargs} = set('
+#         + ','.join(f"'{k}'" for k in sig.parameters.keys()) + ')')
+
+#     extra_dict_keys_var = code.make_var()
+#     code.add_line(f'{extra_dict_keys_var} = set({arg_var}.keys()).
+#                                                   difference('
+#                   f'{possible_kwargs})')
+#     if not var_keyword_param:
+#         code.add_line(f'if {extra_dict_keys_var}:')
+#         code.indent()
+#         code.add_line("""raise TypeError('the following parameters not """
+#                       f"""accepted for "{target}" : """
+#                       f"""{{list({extra_dict_keys_var})}}')""")
+#     else:
+#         if var_keyword_param.annotation != inspect.Parameter.empty:
+#             # Ugh, have to do type strong conversion just in case
+#         else:
+#             # simple conversion of extra stuff to the kwarg parameter
+#             code.add_line()
+
+#             code.add_line(f'if "{p.name}" not in {arg_var}:')
+#             code.indent()
+
+
+def convert_dictionary_to_target(code: CodeGen,
+                                 target: t.Any,
+                                 arg_var: str) -> None:
+    # For now this is pretty simple
+    # in the future it would be nice to make it more efficient in simple cases;
+    kwargs_var = code.start_inline_func()
+    convert_dictionary_to_kwargs(code, target, arg_var)
+    code.end_inline_func()
+    target_var_name = code.inject_closure_var(target)
+    code.add_return(f'{target_var_name}(**{kwargs_var})')
 
 
 def convert_dictionary(code: CodeGen, target: t.Any, arg_var: str) -> None:
@@ -133,7 +334,7 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
     # variable keyword arguments?).
     code.add_line(f'if isinstance({arg_var}, dict):')
     code.indent()
-    convert_dictionary(code, target, arg_var)
+    convert_dictionary_to_target(code, target, arg_var)
     code.dedent()
     code.add_line('else:')
     code.indent()

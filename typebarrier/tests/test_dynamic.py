@@ -5,6 +5,7 @@ import pytest
 from typebarrier import dynamic as d
 
 
+# This decorator
 # Define a lot of types for the tests to play with.
 
 NewTypeStr = t.NewType('NewTypeStr', str)

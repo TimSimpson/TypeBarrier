@@ -1,3 +1,9 @@
+"""
+Dynamically converts JSON-like arguments to the given types.
+
+This also serves as the reference behavior for the other modules, which in
+theory should be faster.
+"""
 import inspect
 import typing as t
 
