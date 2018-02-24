@@ -180,6 +180,12 @@ def convert_dictionary_to_kwargs(code: CodeGen,
     code.add_return(result_var)
 
 
+def convert_list_to_kwargs(code: CodeGen,
+                           target: t.Any,
+                           arg_var: str) -> None:
+    code.add_line('raise NotImplemented()')
+
+
 # The goal of the method below is to be more efficient by not creating a
 # dictionary if possible.
 # def _convert_dictionary_value(code: CodeGen,
@@ -265,9 +271,9 @@ def convert_dictionary_to_kwargs(code: CodeGen,
 #             code.indent()
 
 
-def convert_dictionary_to_target(code: CodeGen,
-                                 target: t.Any,
-                                 arg_var: str) -> None:
+def _convert_dictionary_to_target(code: CodeGen,
+                                  target: t.Any,
+                                  arg_var: str) -> None:
     # For now this is pretty simple
     # in the future it would be nice to make it more efficient in simple cases;
     kwargs_var = code.start_inline_func()
@@ -277,13 +283,86 @@ def convert_dictionary_to_target(code: CodeGen,
     code.add_return(f'{target_var_name}(**{kwargs_var})')
 
 
+def convert_list(code: CodeGen, target: t.Any, arg_var: str) -> None:
+    if not issubclass(target, list):
+        raise ValueError(f'"{target}" is not a subclass of list')
+    element_type = t.Any
+    type_args = getattr(target, '__args__', None)
+    if type_args:
+        if len(type_args) != 1:
+            raise NotImplemented(f'do not know how to convert type "{target}"')
+        element_type = type_args[0]
+
+    code.add_line('try:')
+    code.indent()  # START TRY    - this part is just a list comprehension in
+    result_var = code.make_var()  # dynamic.py lol
+    code.add_line(f'{result_var} = []')
+    element_var = code.make_var()
+    code.add_line(f'for {element_var} in {arg_var}:')
+    code.indent()  # START FOR
+    converted_element_var = code.start_inline_func()
+    convert_value(code, element_type, element_var)
+    code.end_inline_func()
+    code.add_line(f'{result_var}.append({converted_element_var})')
+    code.make_var()
+    code.dedent()  # END FOR
+    code.dedent()  # END TRY BODY
+    te_var = code.make_var()
+    code.add_line(f'except TypeError as {te_var}:')
+    code.indent()
+    code.add_line(f'raise TypeError(f\'can\\\'t convert "{{{arg_var}}} (type '
+                  f'{{type({arg_var})}}" to {target}.\') from {te_var}')
+
+
 def convert_dictionary(code: CodeGen, target: t.Any, arg_var: str) -> None:
     """Writes code needed to convert a dictionary into the given type.
 
     "target" is known at generation time while arg_var is just a string
     representing the incoming argument value in the generated code.
     """
-    code.add_line('raise NotImplemented()  # TODO: add dict code')
+    if not issubclass(target, dict):
+        raise ValueError(f'"{target}" is not a subclass of dict')
+    code.add_line(f'if not isinstance({arg_var}, dict):')
+    code.indent()
+    code.add_line(f'raise TypeError(f\'can\\\'t convert "{{{arg_var}}}" '
+                  f'(type {{type({arg_var})}}) to {target}\')')
+    code.dedent()
+
+    key_type, value_type = t.Any, t.Any
+    type_args = getattr(target, '__args__', None)
+    if type_args:
+        if len(type_args) != 2:
+            raise NotImplemented(f'do not know how to convert type "{target}"')
+        key_type, value_type = type_args
+
+    code.add_line('try:')
+    code.indent()  # BEGIN TRY BODY
+    result_var = code.make_var()
+    code.add_line(f'{result_var} = {{}}')
+    k_var = code.make_var()
+    v_var = code.make_var()
+    code.add_line(f'for {k_var}, {v_var} in {arg_var}.items():')
+    code.indent()  # BEGIN LOOP BODY
+
+    new_k_var = code.start_inline_func()
+    convert_value(code, key_type, k_var)
+    code.end_inline_func()
+
+    new_v_var = code.start_inline_func()
+    convert_value(code, value_type, v_var)
+    code.end_inline_func()
+
+    code.add_line(f'{result_var}[{new_k_var}] = {new_v_var})')
+    code.dedent()  # END FOR LOOP BODY
+    code.add_return(result_var)
+    code.dedent()  # END TRY BODY
+
+    te_var = code.make_var()
+    code.add_line(f'except TypeError as {te_var}:')
+    code.indent()
+    code.add_line(f'raise TypeError(f\'can\\\'t convert "{{{arg_var}}}" '
+                  f'{{type({arg_var})}}) to {target}.\') from {te_var}')
+    code.dedent()
 
 
 def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
@@ -304,11 +383,9 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
             return convert_value(code, st, arg_var)
         # handle with the function calling code below:
     elif issubclass(target, dict):
-        raise NotImplemented()
-        # return convert_dictionary(target, value)
+        return convert_dictionary(code, target, arg_var)
     elif issubclass(target, list):
-        raise NotImplemented()
-        # return convert_list(target, value)
+        return convert_list(code, target, arg_var)
 
     if not inspect.isfunction(target):
         code.add_line(f'if issubclass(type({arg_var}), {target_var_name}):')
@@ -334,7 +411,7 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
     # variable keyword arguments?).
     code.add_line(f'if isinstance({arg_var}, dict):')
     code.indent()
-    convert_dictionary_to_target(code, target, arg_var)
+    _convert_dictionary_to_target(code, target, arg_var)
     code.dedent()
     code.add_line('else:')
     code.indent()
