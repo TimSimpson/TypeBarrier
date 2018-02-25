@@ -30,6 +30,17 @@ def main():
         return result_2
 
     print('Running PyTest...', flush=True)
+    result_3 = subprocess.call(
+        f'{python} -m pytest -vv -x --benchmark-group-by=func '
+        f'{pytest_args}'.strip(),
+        shell=True)
+
+    if result_3:
+        return result_3
+
+    print('Running PyTest Benchmarks...', flush=True)
+    os.environ['TYPIFY_BENCHMARK'] = 'true'
     return subprocess.call(
-        f'{python} -m pytest {pytest_args}'.strip(),
+        f'{python} -m pytest -x --benchmark-group-by=func '
+        f'{pytest_args}'.strip(),
         shell=True)

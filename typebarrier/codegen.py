@@ -378,7 +378,6 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
     representing the argument value.
     """
     target_var_name = code.inject_closure_var(target)
-    print(f'target={target}')
     if target == t.Any:
         code.add_return(arg_var)
         return

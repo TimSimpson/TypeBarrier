@@ -18,7 +18,6 @@ def convert_dictionary_to_kwargs(target: type) -> t.Callable[[t.Any], dict]:
     code.indent()
     cg.convert_dictionary_to_kwargs(code, target, 'value')
 
-    print(code.render())
     a = ast.parse(code.render())
     compiled_code = compile(a, filename='<generated code>', mode='exec')
     exec(compiled_code, code.namespace)
@@ -84,7 +83,6 @@ def convert_value(target: type) -> t.Callable[[t.Any], t.Any]:
     code.indent()
     cg.convert_value(code, target, 'value')
 
-    print(code.render())
     a = ast.parse(code.render())
     compiled_code = compile(a, filename='<generated code>', mode='exec')
     exec(compiled_code, code.namespace)

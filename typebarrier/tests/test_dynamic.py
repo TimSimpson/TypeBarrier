@@ -1,9 +1,23 @@
+import os
 import typing as t
 
 import pytest
 
 from typebarrier import dynamic
 from typebarrier import inline
+
+
+class DynamicCall:
+
+    @staticmethod
+    def convert_value(target: t.Type,
+                      value: t.Any) -> t.Callable[[t.Any], None]:
+        return dynamic.convert_value(target, value)
+
+    @staticmethod
+    def convert_dictionary_to_kwargs(target: t.Type,
+                                     value: t.Any) -> dict:
+        return dynamic.convert_dictionary_to_kwargs(target, value)
 
 
 class InlineCall:
@@ -20,7 +34,103 @@ class InlineCall:
 
 
 def everything(func):
-    return pytest.mark.parametrize('cnv', [dynamic, InlineCall])(func)
+    return pytest.mark.parametrize('cnv', [DynamicCall, InlineCall])(func)
+
+
+class DynamicProxyBM:
+
+    def __init__(self, benchmark):
+        self._benchmark = benchmark
+
+    def convert_value(self, target: t.Type) -> t.Callable[[t.Any], t.Any]:
+        def cb(value):
+            result = dynamic.convert_value(target, value)
+            self._benchmark(dynamic.convert_value, target, value)
+            return result
+
+        return cb
+
+    def convert_dictionary_to_kwargs(self, target: t.Type) -> dict:
+        def cb(value):
+            result = dynamic.convert_dictionary_to_kwargs(target, value)
+            self._benchmark(
+                dynamic.convert_dictionary_to_kwargs, target, value)
+            return result
+
+        return cb
+
+
+class InlineProxyBM:
+
+    def __init__(self, benchmark):
+        self._benchmark = benchmark
+
+    def convert_value(self, target: t.Type) -> t.Callable[[t.Any], t.Any]:
+        converter = inline.convert_value(target)
+
+        def cb(value):
+            result = converter(value)
+            self._benchmark(converter, value)
+            return result
+
+        return cb
+
+    def convert_dictionary_to_kwargs(self, target: t.Type) -> dict:
+        converter = inline.convert_value(target)
+
+        def cb(value):
+            result = converter(value)
+            self._benchmark(converter, value)
+            return result
+
+        return cb
+
+
+class DynamicProxy:
+
+    @staticmethod
+    def convert_value(target: t.Type) -> t.Callable[[t.Any], t.Any]:
+        return lambda value: dynamic.convert_value(target, value)
+
+    @staticmethod
+    def convert_dictionary_to_kwargs(target: t.Type) -> dict:
+        return lambda value: dynamic.convert_dictionary_to_kwargs(
+            target, value)
+
+
+class InlineProxy:
+
+    @staticmethod
+    def convert_value(target: t.Type) -> t.Callable[[t.Any], t.Any]:
+        return inline.convert_value(target)
+
+    @staticmethod
+    def convert_dictionary_to_kwargs(target: t.Type) -> dict:
+        return inline.convert_dictionary_to_kwargs(target)
+
+
+if os.environ.get('TYPIFY_BENCHMARK') == 'true':
+    def do_both(func):
+        @pytest.mark.parametrize('cnv', ['dynamic', 'inline'])
+        def new_func(cnv, benchmark):
+            if cnv == 'dynamic':
+                c = DynamicProxyBM(benchmark)
+            else:
+                c = InlineProxyBM(benchmark)
+            return func(c)
+
+        return new_func
+else:
+    def do_both(func):
+        @pytest.mark.parametrize('cnv', ['dynamic', 'inline'])
+        def new_func(cnv):
+            if cnv == 'dynamic':
+                c = DynamicProxy()
+            else:
+                c = InlineProxy()
+            return func(c)
+
+        return new_func
 
 
 # Define a lot of types for the tests to play with.
@@ -73,11 +183,23 @@ MultiDiscAlbum = t.List[Disc]  # NOQA -it's a type stupid flake8
 TrackToArtistMapping = t.Dict[Track, Artist]
 
 
-@everything
-def test_primitives(cnv):
-    assert cnv.convert_value(str, 'some-string') == 'some-string'
-    assert cnv.convert_value(int, 42) == 42
-    assert cnv.convert_value(bool, True)
+@do_both
+def test_primitives_str(cnv):
+    # benchmark(dynamic.convert_value(int, 42))
+    to_str = cnv.convert_value(str)
+    assert to_str('some-string') == 'some-string'
+
+
+@do_both
+def test_primitives_int(cnv):
+    to_int = cnv.convert_value(int)
+    assert to_int(42) == 42
+
+
+@do_both
+def test_primitives_bool(cnv):
+    to_bool = cnv.convert_value(bool)
+    assert to_bool(True)
 
 
 @everything
@@ -88,12 +210,31 @@ def test_primitives_raises(cnv):
             'to <class \'str\'>' in str(excinfo.value))
 
 
-@everything
-def test_list(cnv):
-    assert cnv.convert_value(list, [1, 2, '3']) == [1, 2, '3']
-    assert cnv.convert_value(t.List[str], ['a', 'b']) == ['a', 'b']
-    assert cnv.convert_value(list, range(5)) == [0, 1, 2, 3, 4]
-    assert (cnv.convert_value(t.List[str], (str(x) for x in range(5)))
+@do_both
+def test_list_1(cnv):
+    to_list = cnv.convert_value(list)
+    assert to_list([1, 2, '3']) == [1, 2, '3']
+
+
+@do_both
+def test_list_2(cnv):
+    to_list = cnv.convert_value(t.List[str])
+    assert to_list(['a', 'b']) == ['a', 'b']
+
+
+@do_both
+def test_list_3(cnv):
+    to_list = cnv.convert_value(list)
+    assert to_list(range(5)) == [0, 1, 2, 3, 4]
+
+
+@do_both
+def test_list_4(cnv):
+    to_list = cnv.convert_value(t.List[str])
+    # def to_list(x):
+    #     return dynamic.convert_value(t.List[str], x)
+
+    assert (to_list((str(x) for x in range(5)))
             == ['0', '1', '2', '3', '4'])
 
 
@@ -101,7 +242,6 @@ def test_list(cnv):
 def test_list_failures(cnv):
     with pytest.raises(TypeError) as excinfo:
         cnv.convert_value(list, 42)
-    print(str(excinfo.value))
     assert ('can\'t convert "42" (type <class \'int\'>) '
             'to <class \'list\'>' in str(excinfo.value))
 
@@ -111,11 +251,16 @@ def test_list_failures(cnv):
             'to typing.List[str].' in str(excinfo.value))
 
 
-@everything
+@do_both
 def test_dictionary(cnv):
-    assert cnv.convert_value(dict, {'a': 1, 2: 'b'}) == {'a': 1, 2: 'b'}
-    assert (cnv.convert_value(t.Dict[str, int], {'a': 1, 'b': 2})
-            == {'a': 1, 'b': 2})
+    to_dict = cnv.convert_value(dict)
+    assert to_dict({'a': 1, 2: 'b'}) == {'a': 1, 2: 'b'}
+
+
+@do_both
+def test_dictionary_type(cnv):
+    to_dict = cnv.convert_value(t.Dict[str, int])
+    assert to_dict({'a': 1, 'b': 2}) == {'a': 1, 'b': 2}
 
 
 @everything
@@ -127,7 +272,6 @@ def test_dictionary_failures(cnv):
 
     with pytest.raises(TypeError) as excinfo:
         cnv.convert_value(t.Dict[str, int], {1: 1})
-    print(excinfo.value)
     assert ('can\'t convert "{1: 1}" (type <class \'dict\'>) '
             'to typing.Dict[str, int].' in str(excinfo.value))
 
@@ -137,9 +281,10 @@ def test_dictionary_failures(cnv):
             'to typing.Dict[str, int].' in str(excinfo.value))
 
 
-@everything
+@do_both
 def test_new_type(cnv):
-    assert cnv.convert_value(NewTypeStr, 'some-string') == 'some-string'
+    to_new_type = cnv.convert_value(NewTypeStr)
+    assert to_new_type('some-string') == 'some-string'
 
 
 @everything
@@ -153,13 +298,14 @@ def test_invalid_conversions(cnv):
     assert 'does not accept any parameters,' in str(excinfo.value)
 
 
-@everything
+@do_both
 def test_single_arg_func(cnv):
 
     def some_func(i: int) -> str:
         return f'index={i}'
 
-    assert cnv.convert_value(some_func, 78) == 'index=78'
+    to_some_func = cnv.convert_value(some_func)
+    assert to_some_func(78) == 'index=78'
 
 
 @everything
@@ -175,10 +321,10 @@ def test_single_arg_func_from_wrong_type_fails(cnv):
             in str(excinfo.value))
 
 
-@everything
+@do_both
 def test_single_arg_class_init(cnv):
-
-    guid = cnv.convert_value(Guid, 'happy')
+    to_guid = cnv.convert_value(Guid)
+    guid = to_guid('happy')
     assert guid.value == 'happy'
 
 
@@ -257,19 +403,39 @@ def test_convert_list_to_kwargs():
     assert cnv.convert_list_to_kwargs(func0, []) == {}
 
 
-@everything
-def test_convert_list_arg(cnv):
-
+@do_both
+def test_convert_list_arg_1(cnv):
     def some_func(s_list: t.List[str]) -> str:
         return ','.join(s_list)
 
-    assert cnv.convert_value(some_func, ['a', 'b', 'c']) == 'a,b,c'
+    to_some_func = cnv.convert_value(some_func)
+    assert to_some_func(['a', 'b', 'c']) == 'a,b,c'
+
+
+@do_both
+def test_convert_list_arg_2(cnv):
+    def some_func(s_list: t.List[str]) -> str:
+        return ','.join(s_list)
 
     # This is surprising, until you remember strings are iterable.
     # Cracking down on this might forbid useful behaviors, so in it stays.
-    assert cnv.convert_value(some_func, 'a') == 'a'
+    to_some_func = cnv.convert_value(some_func)
+    assert to_some_func('a') == 'a'
 
-    assert cnv.convert_value(some_func, 'abc') == 'a,b,c'
+
+@do_both
+def test_convert_list_arg_3(cnv):
+    def some_func(s_list: t.List[str]) -> str:
+        return ','.join(s_list)
+
+    to_some_func = cnv.convert_value(some_func)
+    assert to_some_func('abc') == 'a,b,c'
+
+
+@everything
+def test_convert_list_arg_unhappy(cnv):
+    def some_func(s_list: t.List[str]) -> str:
+        return ','.join(s_list)
 
     with pytest.raises(TypeError) as excinfo:
         cnv.convert_value(some_func, 42)
