@@ -95,6 +95,8 @@ def convert_dictionary_to_kwargs(code: CodeGen,
     result_var = code.make_var()
     code.add_line(f'{result_var} = {{}}')
 
+    acceptable_params: t.List[str] = []
+
     for p in sig.parameters.values():
         if p.kind == inspect.Parameter.VAR_KEYWORD:
             assert var_keyword_param is None
@@ -102,6 +104,8 @@ def convert_dictionary_to_kwargs(code: CodeGen,
         elif p.kind == inspect.Parameter.VAR_POSITIONAL:
             pass  # Can't do anything, just ignore
         else:
+            acceptable_params.append(p.name)
+
             if p.default == p.empty:
                 if not check_key_error:
                     check_key_error = True
@@ -133,8 +137,8 @@ def convert_dictionary_to_kwargs(code: CodeGen,
     # OK, now that the conversion of normal params is done, have to deal
     # with kwazy kwargs
     possible_kwargs = code.make_var()
-    code.add_line(f'{possible_kwargs} = set('
-                  + ','.join(f"'{k}'" for k in sig.parameters.keys()) + ')')
+    code.add_line(f'{possible_kwargs} = set(('
+                  + ' '.join(f"'{k}'," for k in acceptable_params) + '))')
 
     extra_dict_keys_var = code.make_var()
     code.add_line(f'{extra_dict_keys_var} = set({arg_var}.keys()).difference('
@@ -142,14 +146,12 @@ def convert_dictionary_to_kwargs(code: CodeGen,
     if var_keyword_param:
         if var_keyword_param.annotation != inspect.Parameter.empty:
             # Ugh, have to do type strong conversion just in case
-            var_kwargs_var = code.make_var()
-            code.add_line(f'{var_kwargs_var} = {{}}')
             key_var = code.make_var()
             code.add_line(f'for {key_var} in {extra_dict_keys_var}:')
             code.indent()  # START FOR LOOP
             code.add_line('try:')
             code.indent()  # START TRY
-            code.start_inline_func(f'{var_kwargs_var}[{key_var}]')
+            code.start_inline_func(f'{result_var}[{key_var}]')
             convert_value(code,
                           var_keyword_param.annotation,
                           f'{arg_var}[{key_var}]')
@@ -160,23 +162,24 @@ def convert_dictionary_to_kwargs(code: CodeGen,
             code.indent()  # START EXCEPT
             code.add_line('raise TypeError(f\'problem converting argument '
                           f'"{{{key_var}}}" to annotated variable keyword '
-                          f'are type {var_keyword_param.annotation} '
-                          f'found in {target}.')
+                          f'are type {esq(var_keyword_param.annotation)} '
+                          f'found in {target}.\')')
             code.dedent()  # END EXCEPT
             code.dedent()  # END FOR LOOP
-            code.add_line(f'{result_var}[{var_keyword_param.name}] = '
-                          f'{var_kwargs_var}')
         else:
             # simple conversion of extra stuff to the kwarg parameter
-            code.add_line(f'{result_var}[{var_keyword_param.name}] = '
-                          f'{{ name: {arg_var}[name] '
-                          f'for name in {extra_dict_keys_var} }}')
+            key_var = code.make_var()
+            code.add_line(f'for {key_var} in {extra_dict_keys_var}:')
+            code.indent()
+            code.add_line(f'{result_var}[{key_var}] = {arg_var}[{key_var}]')
+            code.dedent()
     else:
         code.add_line(f'if {extra_dict_keys_var}:')
         code.indent()
         code.add_line("""raise TypeError(f'the following parameters not """
-                      f"""accepted for "{target}" : """
+                      f"""accepted for "{esq(target)}" : """
                       f"""{{list({extra_dict_keys_var})}}')""")
+        code.dedent()
     code.add_return(result_var)
 
 
@@ -306,12 +309,14 @@ def convert_list(code: CodeGen, target: t.Any, arg_var: str) -> None:
     code.add_line(f'{result_var}.append({converted_element_var})')
     code.make_var()
     code.dedent()  # END FOR
+    code.add_return(result_var)
     code.dedent()  # END TRY BODY
     te_var = code.make_var()
     code.add_line(f'except TypeError as {te_var}:')
     code.indent()
-    code.add_line(f'raise TypeError(f\'can\\\'t convert "{{{arg_var}}} (type '
-                  f'{{type({arg_var})}}" to {target}.\') from {te_var}')
+    code.add_line(f'raise TypeError(f\'can\\\'t convert "{{{esq(arg_var)}}}" '
+                  f'(type {{type({esq(arg_var)})}}) '
+                  f'to {esq(target)}.\') from {te_var}')
 
 
 def convert_dictionary(code: CodeGen, target: t.Any, arg_var: str) -> None:
@@ -325,7 +330,7 @@ def convert_dictionary(code: CodeGen, target: t.Any, arg_var: str) -> None:
     code.add_line(f'if not isinstance({arg_var}, dict):')
     code.indent()
     code.add_line(f'raise TypeError(f\'can\\\'t convert "{{{arg_var}}}" '
-                  f'(type {{type({arg_var})}}) to {target}\')')
+                  f'(type {{type({arg_var})}}) to {esq(target)}\')')
     code.dedent()
 
     key_type, value_type = t.Any, t.Any
@@ -352,7 +357,7 @@ def convert_dictionary(code: CodeGen, target: t.Any, arg_var: str) -> None:
     convert_value(code, value_type, v_var)
     code.end_inline_func()
 
-    code.add_line(f'{result_var}[{new_k_var}] = {new_v_var})')
+    code.add_line(f'{result_var}[{new_k_var}] = {new_v_var}')
     code.dedent()  # END FOR LOOP BODY
     code.add_return(result_var)
     code.dedent()  # END TRY BODY
@@ -361,7 +366,8 @@ def convert_dictionary(code: CodeGen, target: t.Any, arg_var: str) -> None:
     code.add_line(f'except TypeError as {te_var}:')
     code.indent()
     code.add_line(f'raise TypeError(f\'can\\\'t convert "{{{arg_var}}}" '
-                  f'{{type({arg_var})}}) to {target}.\') from {te_var}')
+                  f'(type {{type({arg_var})}}) to {esq(target)}.\') '
+                  f'from {te_var}')
     code.dedent()
 
 
@@ -444,4 +450,4 @@ def convert_value(code: CodeGen, target: t.Any, arg_var: str) -> None:
             code.indent()
             code.add_line(f"""raise TypeError(f'sole argument to {esq(target)} accepts type {esq(param.annotation)}; cannot be satisified with value {{{arg_var}}}.') from {var_name}""")  # NOQA
             code.dedent()
-            code.add_line(f'return {target_var_name}({return_value})')
+            code.add_return(f'{target_var_name}({return_value})')

@@ -36,21 +36,18 @@ def convert_dictionary_to_kwargs(target: t.Any, value: dict) -> t.Any:
     if extra_dict_keys:
         if var_keyword_param:
             if var_keyword_param.annotation != inspect.Parameter.empty:
-                var_kwargs = {}
                 for key in extra_dict_keys:
                     try:
-                        var_kwargs[key] = convert_value(
+                        result[key] = convert_value(
                             var_keyword_param.annotation, value[key])
                     except TypeError as te:
                         raise TypeError(f'problem converting argument "{key}" '
                                         'to annotated variable keyword arg '
                                         f'type {var_keyword_param.annotation} '
                                         f'found in {target}.')
-                result[var_keyword_param.name] = var_kwargs
             else:
-                result[var_keyword_param.name] = {
-                    name: value[name] for name in extra_dict_keys
-                }
+                for key in extra_dict_keys:
+                    result[key] = value[key]
         else:
             raise TypeError('the following parameters not accepted for '
                             f'"{target}" : {list(extra_dict_keys)}')
@@ -103,7 +100,7 @@ T = t.TypeVar('T')
 
 def convert_list(target: type, value: t.List) -> t.List[T]:
     if not issubclass(target, list):
-        raise ValueError('"{target}" is not a subclass of list')
+        raise ValueError(f'"{target}" is not a subclass of list')
     element_type = t.Any
     type_args = getattr(target, '__args__', None)
     if type_args:

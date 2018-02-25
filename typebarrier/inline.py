@@ -8,6 +8,23 @@ from . import dynamic as d  # NOQA
 T = t.TypeVar('T')
 
 
+def convert_dictionary_to_kwargs(target: type) -> t.Callable[[t.Any], dict]:
+    code = cg.CodeGen()
+    function_name = code.make_var()
+    t_any_var_name = code.inject_closure_var(t.Any)
+    target_var_name = code.inject_closure_var(target)
+    code.add_line(f'def {function_name}(value: {t_any_var_name}) '
+                  f'-> {target_var_name}:')
+    code.indent()
+    cg.convert_dictionary_to_kwargs(code, target, 'value')
+
+    print(code.render())
+    a = ast.parse(code.render())
+    compiled_code = compile(a, filename='<generated code>', mode='exec')
+    exec(compiled_code, code.namespace)
+    return code.namespace[function_name]
+
+
 def convert_list(target: type,
                  ) -> t.Callable[[t.List], t.List[T]]:
     if not issubclass(target, list):
@@ -67,6 +84,7 @@ def convert_value(target: type) -> t.Callable[[t.Any], t.Any]:
     code.indent()
     cg.convert_value(code, target, 'value')
 
+    print(code.render())
     a = ast.parse(code.render())
     compiled_code = compile(a, filename='<generated code>', mode='exec')
     exec(compiled_code, code.namespace)
